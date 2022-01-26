@@ -1,0 +1,27 @@
+// ==07075401885  보이는ARS 적용사례  ===
+
+		NoOp();
+		Answer();
+                NoOp( VARS 070 = ${EXTEN});
+		NoOp( CallerID = ${CALLERID(num)});
+		Set(CALLERID(all)=${CALLERID(num)});
+
+// 바로앱으로 보이는 ARS 실행
+		NoOp(Channel ID --> ${UNIQUEID});
+		NoOp(Mobile Phone --> ${SIPURI});
+                Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+		Set(SIPURI2=${CUT(SIPURI1,@,1)});
+		Set(WEBVIEW="Y");
+		
+//		Firebase Databse update
+		SYSTEM(/usr/bin/php   /var/www/html/vars_fb_db_api.php  ${SIPURI2} ${UNIQUEID}  ${EXTEN} &);
+
+		if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+			NoOp(Run System);
+			SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+			Wait(1);
+		};
+
+//		PlayBack(vars_connect1, noanswer);
+	
+		Stasis(baro-1881);

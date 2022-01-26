@@ -1,0 +1,114 @@
+		NoOp();
+		Answer();
+                NoOp( VARS 070 = ${EXTEN});
+		NoOp( CallerID = ${CALLERID(num)});
+		Set(CALLERID(all)=${CALLERID(num)});
+
+//  대성통신보이는ARS전화걸기, 앱에서 전화걸기에 따른 분기
+//		Read_00:
+//		Read(CHOICENO,1881-0,1,n,1,5);
+		 
+//		 if(${CHOICENO}=3) {
+//  앱에서 전화걸기 실행시 자동으로 3번 선택
+//		       goto DoChoice_03;     
+//		  } else {
+ // 		      goto DoChoice_022;     
+//		      goto Read_01;
+//		   };
+//
+// ----> 무조건 보이는 ARS 실행
+                Set(CHOICENO=3);
+                goto DoChoice_03;  
+
+//         
+		Read_01:
+		Read(CHOICENO,1881-1,1,n,3,5);
+		 
+		 if(${CHOICENO}=1) {
+		       goto DoChoice_01;     
+		  } else if (${CHOICENO}=2) {
+                        goto DoChoice_02;  
+		  } else {
+                    goto DoChoice_03;  
+//		      goto Read_01;
+		   };
+
+
+		DoChoice_01:
+		if(${CHOICENO}=1) {
+
+			NoOp(Channel ID --> ${UNIQUEID});
+			NoOp(Mobile Phone --> ${SIPURI});
+                        Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+			Set(SIPURI2=${CUT(SIPURI1,@,1)});
+
+			SYSTEM(/usr/bin/php /var/www/html/vars_sms_send_api.php ${SIPURI2} ${UNIQUEID}  ${EXTEN}&);
+
+			if(${SHELL(ps -ef | grep BARO_1882 | grep php | wc -c):0:-1} < 185) {
+				NoOp(Run System);
+				SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1882.php &);
+				Wait(1);
+			};
+			PlayBack(1881-20, noanswer);
+			Stasis(baro-1882);
+		};
+		goto End-Bye;
+
+		DoChoice_022:
+			NoOp(Channel ID --> ${UNIQUEID});
+			NoOp(Mobile Phone --> ${SIPURI});
+                        Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+			Set(SIPURI2=${CUT(SIPURI1,@,1)});
+
+			SYSTEM(/usr/bin/php /var/www/html/vars_sms_send_api.php ${SIPURI2} ${UNIQUEID}  ${EXTEN}&);
+
+			if(${SHELL(ps -ef | grep BARO_1882 | grep php | wc -c):0:-1} < 185) {
+				NoOp(Run System);
+				SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1882.php &);
+				Wait(1);
+			};
+			PlayBack(1881-20, noanswer);
+			Stasis(baro-1882);
+	                goto End-Bye;
+
+//  대성통신 대표번호 (051-442-0016:070-5087-6310) ARS전화걸기
+		DoChoice_02:
+//		if(${CHOICENO}=2) {
+//			Wait(1);
+//			Read(CHOICENO_MAN,1881-10,1);
+//			if(${CHOICENO_MAN}=1) {
+				Dial(SIP/${RDN}/07050876310);
+//			} else if(${CHOICENO_MAN}=2) {
+//				Dial(SIP/${RDN}/07078437803);	// org=070-7540-1800
+//			} else if(${CHOICENO_MAN}=3) {
+//				Dial(SIP/${RDN}/01041249797);
+//			};
+//		};
+		goto End-Bye;
+
+
+// 바로앱으로 보이는 ARS 실행
+                DoChoice_03:
+		if(${CHOICENO}=3) {
+			NoOp(Channel ID --> ${UNIQUEID});
+			NoOp(Mobile Phone --> ${SIPURI});
+                        Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+			Set(SIPURI2=${CUT(SIPURI1,@,1)});
+                        Set(WEBVIEW="N");
+
+			SYSTEM(/usr/bin/php /var/www/html/vars_push_send_api.php ${SIPURI2} ${UNIQUEID} ${EXTEN} ${WEBVIEW} &);
+			if(${SHELL(ps -ef | grep BARO_1882 | grep php | wc -c):0:-1} < 185) {
+				NoOp(Run System);
+				SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1882.php &);
+				Wait(1);
+			};
+
+			PlayBack(vars_connect1, noanswer);
+	
+			Stasis(baro-1882);
+
+		};
+//		goto End-Bye;
+
+// 종료
+                End-Bye:

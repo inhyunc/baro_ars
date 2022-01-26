@@ -1,0 +1,136 @@
+// ==070-7540-1881   (주)바로서비스  보이는ARS 샘플  ====
+		NoOp();
+		Answer();
+                NoOp( VARS 070 = ${EXTEN});
+		NoOp( CallerID = ${CALLERID(num)});
+		Set(CALLERID(all)=${CALLERID(num)});
+
+
+//  발신번호 등록을 위한 ARS 수신
+//		Dial(SIP/${RDN}/07040421469);
+//            goto End-Bye;
+
+//  1번-->보이는ARS ,2번--> 버튼식 ARS 
+           	Set(TRYCOUNT=0);
+           	Set(CHOICENO1=0);
+		
+		Read_01:
+		Read(CHOICENO1,1880-001,1,n,3,5);
+		Set(TRYCOUNT=$[${TRYCOUNT} + 1]);
+
+		 if(${CHOICENO1}=1) {
+		       goto DoChoice_01;     
+		 } else if (${CHOICENO1}=2) {
+                       goto DoChoice_02;  
+          	 } else  if(${TRYCOUNT} > 3) {
+		       PlayBack(bye_retry,noanswer);
+			goto End-Bye;
+		 } else {
+                        PlayBack(wrong,noanswer);
+		        goto Read_01;
+		 };
+
+
+		DoChoice_01:
+		Set(TRYCOUNT=0);
+		
+		DoChoice_011:
+		Read(CHOICENO2,1880-103,1,n,3,5);
+		Set(TRYCOUNT=$[${TRYCOUNT} + 1]);
+
+//   보이는 ARS : 연결정보 카카오알림톡 전송
+		if(${CHOICENO2}=1) {
+			NoOp(Channel ID --> ${UNIQUEID});
+			NoOp(Mobile Phone --> ${SIPURI});
+                        Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+			Set(SIPURI2=${CUT(SIPURI1,@,1)});
+
+//                     카카오알림톡
+		        SYSTEM(/usr/bin/php /var/www/html/vars_kakao_provider_api.php   ${SIPURI2} ${UNIQUEID}  ${EXTEN} &);
+			if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+				NoOp(Run System);
+				SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+				Wait(1);
+			};
+			PlayBack(1880-104, noanswer);
+
+			Stasis(baro-1881);
+		};
+		
+//   보이는 ARS : 연결정보 SMS 전송
+		if(${CHOICENO2}=2) {
+			NoOp(Channel ID --> ${UNIQUEID});
+			NoOp(Mobile Phone --> ${SIPURI});
+                        Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+			Set(SIPURI2=${CUT(SIPURI1,@,1)});
+
+//			SYSTEM(/usr/bin/php /var/www/html/vars_sms_send_api.php ${SIPURI2} ${UNIQUEID}  ${EXTEN}&);
+//                     Directsms 이용
+                        Set(SMSNO="07075401881");
+                        SYSTEM(/usr/bin/php /var/www/html/vars_sms_send_direct_api.php ${SIPURI2} ${UNIQUEID}  ${EXTEN}   ${SMSNO} &);
+
+			if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+				NoOp(Run System);
+				SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+				Wait(1);
+			};
+			PlayBack(1880-101, noanswer);
+
+			Stasis(baro-1881);
+		};
+		
+
+
+//   보이는 ARS : 연결정보 PUSH 메세지  전송
+		if(${CHOICENO2}=3) {
+			NoOp(Channel ID --> ${UNIQUEID});
+			NoOp(Mobile Phone --> ${SIPURI});
+                        Set(SIPURI1=${CUT(SIP_HEADER(From),:,2)});
+			Set(SIPURI2=${CUT(SIPURI1,@,1)});
+		        Set(WEBVIEW="Y");
+
+			SYSTEM(/usr/bin/php /var/www/html/vars_push_send_api.php ${SIPURI2} ${UNIQUEID} ${EXTEN} ${WEBVIEW} &);
+
+			if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+				NoOp(Run System);
+				SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+				Wait(1);
+			};
+			PlayBack(1880-102, noanswer);
+
+			Stasis(baro-1881);
+          	 } else  if(${TRYCOUNT} > 3) {
+		       PlayBack(bye_retry,noanswer);
+			goto End-Bye;
+		 } else {
+                        PlayBack(wrong,noanswer);
+		        goto DoChoice_011;
+		 };
+	
+		goto End-Bye;
+
+//   버튼식 ARS
+		DoChoice_02:
+		Set(TRYCOUNT=0);
+
+		DoChoice_021:
+		Read(CHOICENO_MAN,1880-200,1,n,3,5);
+		Set(TRYCOUNT=$[${TRYCOUNT} + 1]);
+		
+		if(${CHOICENO_MAN}=1) {
+			Dial(SIP/${RDN}/07070131119,,M(ars_answer));
+		} else if(${CHOICENO_MAN}=2) {
+			Dial(SIP/${RDN}/01097111104,,M(ars_answer));	// org=070-7540-1800
+		} else if(${CHOICENO_MAN}=3) {
+			Dial(SIP/${RDN}/01020245678,,M(ars_answer));	// org=070-7540-1881
+          	} else  if(${TRYCOUNT} > 3) {
+		        PlayBack(bye_retry,noanswer);
+			goto End-Bye;
+		} else {
+                    PlayBack(wrong,noanswer);
+		    goto DoChoice_021;
+		};
+		goto End-Bye;
+
+// 종료
+		End-Bye:

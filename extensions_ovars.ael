@@ -1,0 +1,122 @@
+// 070-7540-1886 스파이더 아이앤씨
+
+	Ringing();
+	Wait(1);
+	Answer();
+
+	Set(CALLEE=${CALLERID(DNID)});
+	Set(CALLER=${CALLERID(ANI)});
+	NoOp(CALLER=[${CALLER}] UNIQUEID=${UNIQUEID} CALLEE=[${CALLEE}] );
+
+	////////////////////////////////////////
+	//
+	////////////////////////////////////////
+	if(${CALLEE}=07075401887){
+		Set(wavDIR=sbox);
+		Set(agiDIR=sbox);
+		Set(ErrorCode=SpiderInc);
+		GoSub(Get_Daou050Number,start,1(${ErrorCode},1));
+		Set(DAOU050NUMBER=${GOSUB_RETVAL});
+		if(${DAOU050NUMBER} = 0){
+			Hangup();
+			goto End-Bye;
+		};
+	};
+	Set(wavDIR=vars);
+
+	////////////////////////////////////////////////////////////////////////
+	//
+	////////////////////////////////////////////////////////////////////////
+	Set(TRYCOUNT=0);
+	Set(CHOICENO2=2);
+
+DoChoice_011:
+//	Read(CHOICENO2,${wavDIR}/COMM/VARS_103,1,n,3,5);	// 인터넷 주소 정보를 
+//	                                                	// 카카오 알림톡으로 받아보시려면 1번.
+//	                                                	// 문자 메시지로 받아 보시려면 2번.
+//	                                                	// 푸쉬 메시지로 받아 보시려면 3번을 누르세요.
+	Set(TRYCOUNT=$[${TRYCOUNT} + 1]);
+
+
+	////////////////////////////////////////////////////////////////////////
+	// 보이는 ARS : 연결정보 카카오알림톡 전송
+	////////////////////////////////////////////////////////////////////////
+	if(${CHOICENO2}=1) {
+		SYSTEM(/usr/bin/php /var/www/html/vars_kakao_provider_api.php ${CALLER} ${UNIQUEID} ${CALLEE} &);
+
+		if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+			SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+			Wait(1);
+		};
+
+		PlayBack(${wavDIR}/COMM/VARS_104);	// 인터넷 연결 주소를 카카오 알림톡으로 보냈습니다.
+		                                	// 전화를 끊지마시고 알림톡의 보이는 연결 버튼을 눌러 주세요.
+
+		Stasis(baro-1881);
+	}
+
+
+	////////////////////////////////////////////////////////////////////////
+	// 보이는 ARS : 연결정보 SMS 전송
+	////////////////////////////////////////////////////////////////////////
+	else if(${CHOICENO2}=2) {
+//		Set(SMSNO="07075401458");
+		if(${CALLEE}=07075401887){
+			SYSTEM(/usr/bin/php /var/www/html/vars_send_smtnt.php ${CALLER} ${UNIQUEID} ${CALLEE} ${DAOU050NUMBER} &);
+		}
+		else{
+			SYSTEM(/usr/bin/php /var/www/html/vars_sms_send_direct_api.php ${CALLER} ${UNIQUEID} ${CALLEE} &);
+		};
+
+		if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+			SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+			Wait(1);
+		};
+
+		if(${CALLEE}=07075401887){
+			PlayBack(${wavDIR}/eAuth/EAUTH_001);	// 전자 인증 주소를 문자 메시지로 보냈습니다.
+			                                    	// 전화를 끊지 마시고, 문자 메시지의 URL 주소를 클릭하십시요.
+		}
+		else{
+			PlayBack(${wavDIR}/COMM/VARS_101);	// 인터넷 주소를 문자 메시지로 보냈습니다.
+			                                 	// 전화를 끊지 마시고, 문자 메시지의 URL 주소를 클릭하십시요.
+		};
+
+		Stasis(baro-1881);
+	}
+
+
+	////////////////////////////////////////////////////////////////////////
+	// 보이는 ARS : 연결정보 PUSH 메세지 전송
+	////////////////////////////////////////////////////////////////////////
+	else if(${CHOICENO2}=3) {
+		Set(WEBVIEW="Y");
+
+		SYSTEM(/usr/bin/php /var/www/html/vars_push_send_api.php ${CALLER} ${UNIQUEID} ${CALLEE} ${WEBVIEW} &);
+		SYSTEM(/usr/bin/php /var/www/html/vars_fb_db_api.php ${CALLER} ${UNIQUEID} ${CALLEE} &);
+
+		if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+			SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+			Wait(1);
+		};
+
+		PlayBack(${wavDIR}/COMM/VARS_102);	// 연결중입니다.
+
+		Stasis(baro-1881);
+	}
+
+	else if(${TRYCOUNT} > 3) {
+		PlayBack(${wavDIR}/COMM/VARS_210);	// 다시 이용해 주시기 바랍니다.
+		goto End-Bye;
+	}
+	else {
+		PlayBack(${wavDIR}/COMM/VARS_211);	// 잘못 누르셨습니다.
+		goto DoChoice_011;
+	};
+
+	goto End-Bye;
+
+	////////////////////////////////////////////////////////////////////////
+	// 종료
+	////////////////////////////////////////////////////////////////////////
+End-Bye:

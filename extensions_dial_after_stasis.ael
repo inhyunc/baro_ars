@@ -1,0 +1,56 @@
+// == Stasis app 종료후 Dialplan 계속 =====================
+	07050916701 => {
+		NoOp(dial :070- 5091- 6701);
+		Dial(SIP/${RDN}/07050916701,,M(vars_answer));
+	}
+
+	07050916704 => {
+		NoOp(dial : 07050916704);
+		Dial(SIP/${RDN}/07050916704,,M(vars_answer));
+	}
+
+	07050916705 => {
+		NoOp(dial :   07050916705);
+		Dial(SIP/${RDN}/07050916705,,M(vars_answer));
+	}
+
+	07050916707 => {
+		NoOp(dial :07050916707);
+		Dial(SIP/${RDN}/07050916707,,M(vars_answer));
+	}
+
+	07050916708 => {
+		NoOp(dial : 07050916708);
+		Dial(SIP/${RDN}/07050916708,,M(vars_answer));
+	}
+
+	07050916713 => {
+		NoOp(dial :  07050916713);
+		Dial(SIP/${RDN}/07050916713,,M(vars_answer));
+	}
+
+	07070131114 => {
+		NoOp(dial :  07050916714);
+		Dial(SIP/${RDN}/07070131114,,M(vars_answer));
+	}
+
+	01046771680 => {
+		NoOp(dial : 010-4677-1880);
+		Dial(SIP/${RDN}/01046771680,,M(vars_answer));
+	}
+
+	01097111104 => {
+		NoOp(dial : 01097111104);
+		Dial(SIP/${RDN}/01097111104,,M(vars_answer));
+	}
+
+	01020245678 => {
+		NoOp(dial :  01020245678);
+		Dial(SIP/${RDN}/01020245678,,M(vars_answer));
+	}
+
+	07051483302 => {
+		NoOp(dial :  07051483302);
+		Dial(SIP/${RDN}/07051483302,,M(vars_answer));
+	}
+

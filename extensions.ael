@@ -1,0 +1,70 @@
+globals {
+	CONSOLE-AEL="Console/dsp"; 		// Console interface for demo
+	IAXINFO-AEL=guest;				// IAXtel username/password
+	OUTBOUND-TRUNK="Zap/g2";		// Trunk interface
+	OUTBOUND-TRUNKMSD=1;					// MSD digits to strip (usually 1 or 0)
+};
+context vars-inbound {
+// ==070-7540-1880   (주)바로서비스  : 알림톡(SMS) + PUSH ===
+	_07075401880 => {
+        #include "extensions_07075401880.ael"
+	};
+
+// ==070-7540-1883   (주)바로서비스  : 바로앱 - 웹뷰 ===
+	_07075401883 => {
+        #include "extensions_07075401883.ael"
+	};
+
+// ==070-7540-1884   (주)바로서비스  : 바로앱 - 외부브라우져 ===
+	_07075401884 => {
+        #include "extensions_07075401883.ael"
+	};
+
+// ==070-7540-1885   보이는ARS 적용사례 :  바로앱 - 외부브라우져 ===
+	_07075401885 => {
+        #include "extensions_07075401885.ael"
+	};
+
+// ==07075401881    (주)바로서비스 샘플 :   알림톡 + SMS + PUSH===
+	_07075401881 => {
+        #include "extensions_07075401881.ael"
+	};
+
+// ==07075401882   대성통신  기존 웹페이지  ===
+	_07075401882 => {
+        #include "extensions_07075401882.ael"
+	};
+
+// == Stasis app 종료후 Dialplan 계속 ===
+#include "extensions_dial_after_stasis.ael"
+
+t => Playback(wrong,noanswer) ;
+i => Playback(wrong,noanswer) ; 
+
+}
+
+context vars_svc {
+	_07075401886 => {	// 보이는 ARS 주문
+		#include "extensions_vorder.ael"
+	};
+	_07075401887 => {
+		#include "extensions_nvars.ael"
+	};
+	_07075401888 => {
+		#include "extensions_vote.ael"
+	};
+	_07075401889 => {	// 보이는 ARS 예약
+		#include "extensions_ezshop.ael"
+	};
+
+	t => Playback(wrong,noanswer) ;
+	i => Playback(wrong,noanswer) ; 
+}
+
+context vlog_auth {
+	s => {
+		#include "extensions_vlogauth.ael"
+	}
+	t => Playback(wrong,noanswer) ;
+	i => Playback(wrong,noanswer) ; 
+}

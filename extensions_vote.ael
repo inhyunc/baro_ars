@@ -1,0 +1,178 @@
+
+	Ringing();
+
+	Set(CALLEE=${CALLERID(DNID)});
+	Set(CALLER=${CALLERID(ANI)});
+	NoOp(CALLER=[${CALLER}] UNIQUEID=${UNIQUEID} CALLEE=[${CALLEE}] );
+
+	Set(DAOU050NUMBER=${CALLEE});
+
+	////////////////////////////////////////
+	//
+	////////////////////////////////////////
+	Set(wavDIR=vars);
+	Set(baseDIR=/var/www/html);
+	Set(PrcSts=0);	// 0=NOK, 1=OK
+
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// phpari 프로세스 동작 상태 체크 및 활성화                                           
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+	if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+		Set(TryCount=0);
+
+		while(${TryCount} < 3){
+			SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+
+			Set(TryCount=$[${TryCount} + 1]);
+			Wait(1);
+
+			if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+				Noop( ==========> BARO_1881 Fail !! );
+			}
+			else{
+				Set(PrcSts=1);
+				Set(TryCount=5);
+			};
+		}
+	}
+	else{
+		Set(PrcSts=1);
+	};
+
+	if(${PrcSts} = 0){
+		PlayBack(${wavDIR}/COMM/VARS_120);   // 프로세스가 동작되지 않아, 서비스 제공이 어렵습니다.
+		goto vars_bye;
+	}
+
+	Answer();
+
+	////////////////////////////////////////////////////////////////////////
+	//
+	////////////////////////////////////////////////////////////////////////
+	Set(TryCount=0);
+	Set(FailCount=0);
+	Set(SELNUMBER=3);
+	
+
+send_retry:
+	////////////////////////////////////////////////////////////////////////
+	// 보이는 ARS : 연결정보 PUSH 메세지 전송
+	// SYSTEM(/usr/bin/php /var/www/html/vars_push_send_api.php ${CALLER} ${UNIQUEID} ${CALLEE} ${WEBVIEW} &);
+	// SYSTEM(/usr/bin/php /var/www/html/vars_fb_db_api.php ${CALLER} ${UNIQUEID} ${CALLEE} &);
+	////////////////////////////////////////////////////////////////////////
+	if(${SELNUMBER}=3) {
+		Set(WEBVIEW="Y");
+
+		Set(PHP=${baseDIR}/vars_push_send_api.php);
+		Set(OPT=${SPRINTF(%s %s %s %s,${CALLER},${UNIQUEID},${CALLEE},${WEBVIEW})});
+
+		Set(PH1=${baseDIR}/vars_fb_db_api.php);
+		Set(OP1=${SPRINTF(%s %s %s,${CALLER},${UNIQUEID},${CALLEE})});
+
+		Set(F1=${wavDIR}/COMM/VARS_102);	// 연결중입니다.
+		Set(F2=${wavDIR}/COMM/VARS_202);	// 연결이 되지 않고 있습니다.
+	}
+
+	////////////////////////////////////////////////////////////////////////
+	// 보이는 ARS : 연결정보 SMS 전송
+	//                                                                      
+	// SYSTEM(/usr/bin/php /var/www/html/vars_send_smtnt.php ${CALLER} ${UNIQUEID} ${CALLEE} ${SMSNO} &);
+	////////////////////////////////////////////////////////////////////////
+	else if(${SELNUMBER}=2) {
+		Set(SMSNO="07075401458");
+
+		Set(PHP=${baseDIR}/vars_send_smtnt.php);
+//		Set(OPT=${SPRINTF(%s %s %s,${CALLER},${UNIQUEID},${CALLEE})});
+		Set(OPT=${SPRINTF(%s %s %s %s,${CALLER},${UNIQUEID},${CALLEE},${DAOU050NUMBER})} );
+
+		Set(F1=${wavDIR}/COMM/VARS_101);	// 인터넷 주소를 문자 메시지로 보냈습니다.
+		                                 	// 전화를 끊지 마시고, 문자 메시지의 URL 주소를 클릭하십시요.
+
+		Set(F2=${wavDIR}/COMM/VARS_201);	// 문자 메시지 전송이 실패되었습니다.
+	}
+
+	else {
+		PlayBack(${wavDIR}/COMM/VARS_wrong);	// 잘못 누르셨습니다.
+		goto send_retry;
+	};
+
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// 고객에게 문자 보내기/ 푸쉬 메시지 보내기                                  
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+	SYSTEM(/usr/bin/php ${PHP} ${OPT} &);
+	if("${SYSTEMSTATUS}" = "SUCCESS"){
+		if(${SELNUMBER}=3) {
+			SYSTEM(/usr/bin/php ${PH1} ${OP1} &);
+		}
+		PlayBack(${F1});
+	}
+	else{
+		PlayBack(${F2});
+		goto vars_bye;
+	}
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// 고객이 웹페이지 접속을 하지 않으면 일정 시간후에 문자 재발송                                   
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+	if(${SELNUMBER}=3) {
+		Set(TryCount=0);
+		Set(PrcSts=0);	// 0=NOK, 1=OK
+
+		while(${TryCount} < 10){
+			Wait(1);
+			Set(TryCount=$[${TryCount} + 1]);
+
+			GoSub(GetVarsAppPushSts,start,1(vote_svc,${CALLER},${CALLEE}));
+			Set(RESULT=${GOSUB_RETVAL});
+	                if(${RESULT}=1){
+				Set(TryCount=10);
+				Set(PrcSts=1);
+			}
+			else{
+				Noop(------------------- RESULT => ${RESULT});
+			}
+		}
+
+		if(${PrcSts}=0) {
+			Set(SELNUMBER=2);
+			goto send_retry;
+		}
+	}
+
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// 외부 프로세스 연동 시작                                                        
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+vars_retry:
+	Stasis(baro-1881);
+	Log(NOTICE, [${CALLER}] -> [${CALLEE}/${DAOU050NUMBER}] : STASISSTATUS = [${STASISSTATUS}] !! );
+
+	if("${STASISSTATUS}" = "FAILED"){
+		Set(FailCount=$[${FailCount} + 1]);
+
+		if(${FailCount} > 2) {
+			PlayBack(${wavDIR}/COMM/VARS_121);   // 장애가 발생하여 서비스 제공이 어렵습니다.
+			goto vars_bye;
+		}
+		else{
+			PlayBack(${wavDIR}/COMM/VARS_122);   // 잠시만 기다리십시요. 연결중입니다.
+			goto vars_retry;
+		};
+	};
+
+	goto vars_bye;
+
+	////////////////////////////////////////////////////////////////////////
+	// 종료
+	////////////////////////////////////////////////////////////////////////
+vars_bye:

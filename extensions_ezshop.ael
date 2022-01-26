@@ -1,0 +1,231 @@
+
+	Ringing();
+
+	Set(CALLEE=${CALLERID(DNID)});
+	Set(CALLER=${CALLERID(ANI)});
+	NoOp(CALLER=[${CALLER}] UNIQUEID=${UNIQUEID} CALLEE=[${CALLEE}] );
+
+	Set(DAOU050NUMBER=${CALLEE});
+
+	////////////////////////////////////////
+	//
+	////////////////////////////////////////
+	Set(wavDIR=sbox);
+	Set(agiDIR=sbox);
+	Set(ErrorCode=EzshopMain);
+	GoSub(Get_Daou050Number,start,1(${ErrorCode},2));
+	Set(DAOU050NUMBER=${GOSUB_RETVAL});
+	if(${DAOU050NUMBER}=0){
+		if(${LEN(${DiverDN})}=0){
+			Answer();
+			Wait(1);
+			Playback(${wavDIR}/SBOX_003);		// 지금거신 전화번호는 서비스를 받을 수 있는 번호가 아닙니다.
+			Hangup();
+			goto End-Bye;
+		}
+		else{
+			Set(DAOU050NUMBER=${KT_PFX}${DiverDN});
+		}
+	};
+	Answer();
+
+	////////////////////////////////////////
+	//
+	////////////////////////////////////////
+	Set(wavDIR=vars);
+	Set(baseDIR=/var/www/html);
+	Set(PrcSts=0);	// 0=NOK, 1=OK
+
+	////////////////////////////////////////////////////////////////////////
+	//
+	////////////////////////////////////////////////////////////////////////
+	Set(TryCount=0);
+	Set(FailCount=0);
+	Set(m_SelNumber=16);
+
+DoChoice_011:
+	Set(F1=${SPRINTF(EZS_${DAOU050NUMBER})});	// 매장 이름
+	Set(FileSize=${STAT(s,/var/lib/asterisk/sounds/vars/ezshop/${F1}.wav)});
+	if(${FileSize} <= 0){
+		Set(F1=${SPRINTF(EZS_${CALLEE})});	// 보이는 ARS
+	}
+	PlayBack(${wavDIR}/ezshop/${F1});
+
+	Read(m_SelNumber,${wavDIR}/ezshop/EZS_001,1,n,3,5);	// 예약은 1번.
+	                                               		// 예약 변경은 2번.
+	                                               		// 상담원 연결은 3번을 누르세요.
+	if(${LEN(${m_SelNumber})}=0){
+		PlayBack(${wavDIR}/COMM/VARS_212);		// 입력 시간이 초과되었습니다.
+		goto End-Bye;
+	}
+
+	if(${m_SelNumber}=1) {
+		Set(F1=${wavDIR}/ezshop/EZS_011);		// 예약 홈페이지 주소를 문자 메시지로 보냈습니다.
+		                                 		// 전화를 끊지 마시고, 문자 메시지의 URL 주소를 클릭하세요.
+		goto agi_succ;
+	}
+
+	else if(${m_SelNumber}=2) {
+		Set(F1=${wavDIR}/ezshop/EZS_015);		// 예약 변경 홈페이지 주소를 문자 메시지로 보냈습니다.
+		                                 		// 전화를 끊지 마시고, 문자 메시지의 URL 주소를 클릭하세요.
+		goto agi_succ;
+	}
+
+	else if(${m_SelNumber}=3) {
+		Set(F1=${wavDIR}/COMM/VARS_102);		// 연결중입니다.
+		goto agi_succ;
+
+		Dial(SIP/${RDN}/${m_shopTel});
+		goto End-Bye;
+	}
+	else {
+		Set(m_SelNumber=16);
+		PlayBack(${wavDIR}/COMM/VARS_211);		// 잘못 누르셨습니다.
+		goto DoChoice_011;
+	}
+
+agi_succ:
+	AGI(ezshop_rsvt_0507.php);
+	Log(NOTICE,[${CALLER}] ezshop_rsvt_0507.php : AGI=[${AGISTATUS}] RLT=[${RESULT}] m_shopTel=[${m_shopTel}]);
+	if("${AGISTATUS}"!="SUCCESS") {
+		goto fail_sms;
+	}
+
+	if("${RESULT}"="9999") {
+		goto fail_9999;
+	}
+	if("${RESULT}"="8888") {
+		goto fail_9999;
+	}
+	if("${RESULT}"="8999") {	// ARS 번호에 대한 매장 정보없음.
+		goto fail_8999;
+	}
+	if("${RESULT}"="8998") {	// 해당 매장에 등록된 회원 아님
+		goto fail_8998;
+	}
+	if("${RESULT}"="8997") {	// 등록된 예약 정보 없음
+		goto fail_8997;
+	}
+	if("${RESULT}"="1111") {	// 완료
+		Noop(SUCC);
+	}
+	else{
+		goto fail_9999;
+	}
+
+	PlayBack(${F1});
+
+	if(${m_SelNumber}=3) {
+		if(${LEN(${m_shopTel})}=0){
+			PlayBack(${wavDIR}/ezshop/EZS_017);		// 매장 연결 전화 번호가 없습니다.
+			                                 		// 관리자에게 문의하십시요.
+		}
+		else{
+			Dial(SIP/${RDN}/${m_shopTel});
+		}
+		goto End-Bye;
+	}
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// phpari 프로세스 동작 상태 체크 및 활성화                                           
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+	if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+		Set(TryCount=0);
+
+		while(${TryCount} < 3){
+			SYSTEM(/usr/bin/php /var/www/html/phpari/baro/BARO_1881.php &);
+
+			Set(TryCount=$[${TryCount} + 1]);
+			Wait(1);
+
+			if(${SHELL(ps -ef | grep BARO_1881 | grep php | wc -c):0:-1} < 185) {
+				Noop( ==========> BARO_1881 Fail !! );
+			}
+			else{
+				Set(PrcSts=1);
+				Set(TryCount=5);
+			};
+		}
+	}
+	else{
+		Set(PrcSts=1);
+	};
+
+	if(${PrcSts} = 0){
+		PlayBack(${wavDIR}/COMM/VARS_120);   // 프로세스가 동작되지 않아, 서비스 제공이 어렵습니다.
+		goto End-Bye;
+	}
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// 고객에게 카카오 알림톡 보내기/문자 보내기/ 푸쉬 메시지 보내기                                  
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+//	SYSTEM(/usr/bin/php ${PHP} ${OPT} &);
+//	if("${SYSTEMSTATUS}" = "SUCCESS"){
+//		if(${m_SelNumber}=3) {
+//			SYSTEM(/usr/bin/php ${PH1} ${OP1} &);
+//		}
+//		PlayBack(${F1});
+//	}
+//	else{
+//		PlayBack(${F2});
+//	}
+
+
+	////////////////////////////////////////////////////////////////////////
+	//                                                                      
+	// 외부 프로세스 연동 시작                                                        
+	//                                                                      
+	////////////////////////////////////////////////////////////////////////
+vars_retry:
+	Stasis(baro-1881);
+	Log(NOTICE, [${CALLER}] -> [${CALLEE}/${DAOU050NUMBER}] : STASISSTATUS = [${STASISSTATUS}] !! );
+
+	if("${STASISSTATUS}" = "FAILED"){
+		Set(FailCount=$[${FailCount} + 1]);
+
+		if(${FailCount} > 2) {
+			PlayBack(${wavDIR}/COMM/VARS_121);   // 장애가 발생하여 서비스 제공이 어렵습니다.
+			goto End-Bye;
+		}
+		else{
+			PlayBack(${wavDIR}/COMM/VARS_122);   // 잠시만 기다리십시요. 연결중입니다.
+			goto vars_retry;
+		};
+	};
+
+	goto End-Bye;
+
+DoChoice_012:
+	Set(m_SelNumber=16);
+	PlayBack(${wavDIR}/COMM/VARS_211);	// 잘못 누르셨습니다.
+	goto DoChoice_011;
+
+fail_sms:
+	PlayBack(${wavDIR}/COMM/VARS_202);	// 문자 메시지 전송이 실패되었습니다.
+	goto End-Bye;
+
+fail_9999:
+	PlayBack(${wavDIR}/COMM/VARS_202);	// 장애가 발생하여 서비스 제공이 어렵습니다.
+	goto End-Bye;
+
+fail_8999:
+	PlayBack(${wavDIR}/ezshop/EZS_010);	// ARS 번호에 대한 매장 정보없음 --> 해당 번호는 서비스 준비중입니다.
+	goto End-Bye;
+
+fail_8998:
+	PlayBack(${wavDIR}/ezshop/EZS_014);	// 해당 매장에 등록된 회원 아님 --> 예약된 정보가 없습니다.
+	goto End-Bye;
+
+fail_8997:
+	PlayBack(${wavDIR}/ezshop/EZS_014);	// 등록된 예약 정보가 없습니다.
+	goto End-Bye;
+
+	////////////////////////////////////////////////////////////////////////
+	// 종료
+	////////////////////////////////////////////////////////////////////////
+End-Bye:
+	Hangup();
